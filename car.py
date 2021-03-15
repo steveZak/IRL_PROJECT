@@ -1,0 +1,39 @@
+import numpy as np
+
+class Car:
+    def __init__(self):
+        # toyota corolla
+        self.fr = 0.7 # friction coefficient?
+        self.m = 1066
+        self.Caf = 0.1
+        self.Csf = 0.1
+        self.Car = 0.1
+        self.Iz = 1706
+        self.lf = 1.054
+        self.lr = 2.372-1.054
+        self.beta_x = 0 # road slope angle
+        self.beta_y = 0 # road tilt angle
+        self.reff = 1*0.264 # estimated wheel radius
+        self.X = [0, 0, 0, 0.000001, 0, 0] # x, y, tht, x_dot, y_dot, tht_dot
+        self.A = np.array([[0,1,0],[0,0,1],[0,0,0]])
+        self.B = np.array([[0,0,0],[0,0,0],[0,0,0]])
+    
+    def step(self, u, delta_t):
+        # page 38 in https://core.ac.uk/download/pdf/81577667.pdf with air resistance set to 0
+        # X_dot = Ax+Bu
+        X_dot = np.add(
+                 [self.X[3],\
+                 self.X[4],\
+                 self.X[5],\
+                 -self.X[4]*self.X[5]-np.sign(self.X[3])*(0.5*0*0*0*(self.X[4]**2)+self.fr*self.m*9.81+self.m*9.81*np.sin(self.beta_x))/self.m,\
+                 -self.X[3]*self.X[5]+(2*self.Car*(self.lr*self.X[5]-self.X[4])/self.X[3]-9.81*np.sign(self.beta_y))/self.m,\
+                 self.lr*(2*self.Car*(self.lr*self.X[5]-self.X[4])/(self.X[3]*self.m))/self.Iz]\
+              , [
+                 0,
+                 0,
+                 0,
+                 (self.Csf*((2*self.reff*u[0]-2*self.X[3])/(self.reff*u[0]))*np.cos(u[1])-2*self.Caf*(u[1]+(self.lf*self.X[5]-self.X[4]/self.X[3]))*np.sin(u[1])+self.Csf*((2*self.reff*u[0]-2*self.X[3])/(self.reff*u[0])))/self.m,
+                 (self.Csf*((2*self.reff*u[0]-2*self.X[3])/(self.reff*u[0]))*np.sin(u[1])-2*self.Caf*(u[1]+(self.lf*self.X[5]-self.X[4]/self.X[3]))*np.cos(u[1]))/self.m,
+                 self.lf*(self.Csf*((2*self.reff*u[0]-2*self.X[3])/(self.reff*u[0]))*np.sin(u[1])-2*self.Caf*(u[1]+(self.lf*self.X[5]-self.X[4]/self.X[3]))*np.cos(u[1]))/self.Iz,
+                ])
+        self.X += np.multiply(delta_t, X_dot)
