@@ -1,7 +1,7 @@
 import numpy as np
 
 class Car:
-    def __init__(self):
+    def __init__(self, x, y):
         # toyota corolla
         self.fr = 0.7 # friction coefficient?
         self.m = 1066
@@ -14,13 +14,12 @@ class Car:
         self.beta_x = 0 # road slope angle
         self.beta_y = 0 # road tilt angle
         self.reff = 1*0.264 # estimated wheel radius
-        self.X = [0, 0, 0, 0.000001, 0, 0] # x, y, tht, x_dot, y_dot, tht_dot
-        self.A = np.array([[0,1,0],[0,0,1],[0,0,0]])
-        self.B = np.array([[0,0,0],[0,0,0],[0,0,0]])
+        self.X = [x, y, np.pi/4, 0.000001, 0, 0] # x, y, tht, x_dot, y_dot, tht_dot
     
-    def step(self, u, delta_t):
+    def step(self, u, delta_t=0.02, fr=0.7):
         # page 38 in https://core.ac.uk/download/pdf/81577667.pdf with air resistance set to 0
         # X_dot = Ax+Bu
+        self.fr = fr
         X_dot = np.add(
                  [self.X[3],\
                  self.X[4],\
