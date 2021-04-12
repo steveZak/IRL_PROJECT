@@ -44,17 +44,15 @@ class Car:
         #          0]
         tau = u[0]
         delta = u[1]
-        if tau/self.reff<self.m*9.81*self.fr:
+        if np.abs(tau/self.reff)<self.m*9.81*self.fr:
             __x = tau/(self.m*self.reff)*math.cos(delta)
             __y = tau/(self.m*self.reff)*math.sin(delta)
         else:
-            __x = self.m*9.81*self.fr*math.cos(delta)
-            __y = self.m*9.81*self.fr*math.sin(delta)
+            __x = 9.81*self.fr*math.cos(delta) # *m?
+            __y = 9.81*self.fr*math.sin(delta)
         (__x, __y) = np.multiply([[math.cos(self.X[2]), -math.sin(self.X[2])],[math.sin(self.X[2]), math.cos(self.X[2])]], [__x,__y])
         __x = __x[0]
         __y = __y[0]
-        print(__x)
-        print(__y)
         _x = self.X[3]
         _y = self.X[4]
         _tht = self.X[5]
@@ -66,8 +64,4 @@ class Car:
                  delta*self.lf/(self.lf+self.lr)
                 ]
         _X = np.multiply(delta_t, X_dot)
-        # _X[0] *= math.cos(self.X[2])
-        # _X[1] *= math.sin(self.X[2])
-        # _X[3] *= math.cos(self.X[2])
-        # _X[4] *= math.sin(self.X[2])
         self.X += np.multiply(delta_t, X_dot)

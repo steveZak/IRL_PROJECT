@@ -1,5 +1,6 @@
 import random
 import pygame
+from pygame.locals import *
 import numpy as np
 import math
 from car import Car
@@ -47,16 +48,19 @@ def blitRotate(surf, image, pos, originPos, angle):
 def getHumanControl():
     yaw = 0
     thrust = -20
-    print(pygame.K_LEFT)
-    print(pygame.key.get_pressed()[pygame.K_LEFT])
-    if pygame.key.get_pressed()[pygame.K_LEFT]:
+    # print(pygame.K_LEFT)
+    # print(pygame.key.get_pressed()[pygame.K_LEFT])
+    keys = pygame.key.get_pressed()
+    print(keys[K_LEFT])
+    if keys[K_LEFT]:
         yaw = 0.0001
-    if pygame.key.get_pressed()[pygame.K_RIGHT]:
+    if keys[K_RIGHT]:
         yaw = -0.0001
-    if pygame.key.get_pressed()[pygame.K_UP]:
+    if keys[K_UP]:
         thrust = -40
-    if pygame.key.get_pressed()[pygame.K_DOWN]:
+    if keys[K_DOWN]:
         thrust = -40
+    print(thrust)
     # for event in pygame.event.get():
     #     # print(event)
     #     if event.type == pygame.KEYDOWN:
@@ -74,19 +78,22 @@ def getHumanControl():
 class Environment:
     # 100 x 100 map
     def __init__(self):
-        self.car = Car(-200, -200)
-        self.puddle = [[30, 70], [70, 30]] # rectangular puddle ([x1, y1], [x2, y2])
-        
-        # screen = pygame.display.set_mode(icon.get_rect().size, 0, 32)
-        self.icon = icon.convert() # now you can convert 
-        # screen.blit(background, (0, 0))
-
+        self.icon = icon.convert() # now you can convert
+        self.Q = np.array([100, 100, 0, 100, 100, 0]) 
+    
     def step(self, u):
         if self.car.X[0]>self.puddle[0][0] and self.car.X[0]<self.puddle[0][1] and self.car.X[1]>self.puddle[1][0] and self.car.X[1]<self.puddle[1][1]:
             self.car.step(u, fr=0.2)
         else:
             self.car.step(u, fr=0.7)
+        reward = np.dot(self.Q, np.dot(self.Q, self.car.X-self.goal))
+        return reward
     
+    def reset(self):
+        self.puddle = [[random.random()*50, 50+random.random()*50], [50+random.random()*50, random.random()*50]]
+        self.car = Car(-200, -200)
+        self.goal = [800, 200]
+
     def run(self):
         white = [255, 255, 255]
         screen.fill(white)
@@ -98,8 +105,8 @@ class Environment:
             pygame.draw.circle(screen, [255, 0, 0], (200, 800), 20)
             pygame.draw.circle(screen, [0, 0, 255], (800, 200), 20)
             # u = [1, random.random()*2] # 0.1/0.2-0.1
-            # u = [-10, 0.0001]
-            u = getHumanControl()
+            u = [-10, 0.0001]
+            # u = getHumanControl()
             pygame.event.pump()
             # get NN control
             # apply step
