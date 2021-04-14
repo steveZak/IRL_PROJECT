@@ -135,5 +135,6 @@ class Environment:
             pygame.time.delay(1)
             pygame.display.flip()
 
-env = Environment()
-env.run()
+# env = Environment()
+# env.reset()
+# env.run()
