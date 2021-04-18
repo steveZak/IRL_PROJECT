@@ -2,7 +2,7 @@ import math
 import numpy as np
 
 class Car:
-    def __init__(self, x, y):
+    def __init__(self, X):
         # toyota corolla
         self.fr = 0.9 # friction coefficient?
         self.m = 1066
@@ -15,7 +15,7 @@ class Car:
         self.beta_x = 0 # road slope angle
         self.beta_y = 0 # road tilt angle
         self.reff = 1*0.264 # estimated wheel radius
-        self.X = [x, y, np.pi/4, 0.000001, 0, 0] # x, y, tht, x_dot, y_dot, tht_dot
+        self.X = X # x, y, tht, x_dot, y_dot, tht_dot
     
     def step(self, u, delta_t=0.1, fr=0.9):
         # page 38 in https://core.ac.uk/download/pdf/81577667.pdf with air resistance set to 0
