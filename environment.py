@@ -85,7 +85,7 @@ class Environment:
     def step(self, u, gui = True):
         if self.puddle is not None and self.car.X[0] > self.puddle[0][0] and self.car.X[0] < self.puddle[0][1] and self.car.X[1] > self.puddle[1][0] and self.car.X[1] < self.puddle[1][1]:
             self.car.step(u, fr=0.2)
-            print("in a puddle")
+            # print("in a puddle")
         else:
             self.car.step(u, fr=0.7)
         if gui:

@@ -13,7 +13,6 @@ class Actor(torch.nn.Module):
         if init_weights is not None:
             self.fc1.weight.data = init_weights[0]
             self.fc2.weight.data = init_weights[1]
-    
 
     def update(self, model):
         self.fc1.weight.data = (1-tau)*self.fc1.weight.data + tau*model.fc1.weight.data
@@ -106,11 +105,11 @@ for episode in range(100):
     real_env.reset()
     control_env = Environment(gui=False)
     prev_traj = None
-    print("epoch = "+str(episode))
+    print("epoch = " + str(episode))
     for t in range(1000): # timesteps that the model will be actuated for
         control_env.reset(noise=False, X=real_env.car.X) # places the car in the controller env
         X = np.array(control_env.car.X) # state
-        X_ = X.copy()#?
+        X_ = X.copy()
         if prev_traj is not None:
             X_ = prev_traj[5][0]
         else:
@@ -118,7 +117,7 @@ for episode in range(100):
         traj = []
         if t%5 == 0:
             # only do this once every 5 steps
-            for step in range(20): # calculates X, u for the planned trajectory.
+            for step in range(6): # calculates X, u for the planned trajectory.
                 act_opt.zero_grad()
                 cri_opt.zero_grad()
                 u = actor.forward(torch.Tensor(np.concatenate(((X_ - X), (real_env.goal - X)), axis=0))) # fix the inputs here and further down

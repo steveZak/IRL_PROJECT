@@ -44,24 +44,28 @@ class Car:
         #          0]
         tau = u[0]
         delta = u[1]
+        # print((tau, delta))
+        # print(self.X)
         if np.abs(tau/self.reff)<self.m*9.81*self.fr:
-            __x = tau/(self.m*self.reff)*math.cos(delta)
-            __y = tau/(self.m*self.reff)*math.sin(delta)
+            __x = tau/(self.m*self.reff)*math.cos(self.X[2])
+            __y = tau/(self.m*self.reff)*math.sin(self.X[2]) #delta
         else:
-            __x = 9.81*self.fr*math.cos(delta) # *m?
-            __y = 9.81*self.fr*math.sin(delta)
-        (__x, __y) = np.multiply([[math.cos(self.X[2]), -math.sin(self.X[2])],[math.sin(self.X[2]), math.cos(self.X[2])]], [__x,__y])
-        __x = __x[0]
-        __y = __y[0]
+            __x = 9.81*self.fr*math.cos(self.X[2]) # *m?
+            __y = 9.81*self.fr*math.sin(self.X[2])
+        # (__x, __y) = np.multiply([[math.cos(self.X[2]), -math.sin(self.X[2])],[math.sin(self.X[2]), math.cos(self.X[2])]], [__x,__y])
+        # __x = __x[0]
+        # __y = __y[0]
         _x = self.X[3]
         _y = self.X[4]
         _tht = self.X[5]
+        # print(_tht)
         X_dot = [_x,
                  _y,
                  _tht,
                  __x,
                  __y,
-                 delta*self.lf/(self.lf+self.lr)
+                 delta*self.lf*np.sqrt(self.X[3]**2+self.X[4]**2)
                 ]
         _X = np.multiply(delta_t, X_dot)
         self.X += np.multiply(delta_t, X_dot)
+        # self.X[5] = delta*self.lf*np.sqrt(self.X[3]**2+self.X[4]**2)
