@@ -86,7 +86,7 @@ class Buffer:
 
 # train the model
 _u = []
-control = [[-100, -50, 0, 50, 100], [-0.002, -0.001, 0, 0.001, 0.002]]
+control = [[-100, -50, 0, 50, 100], [-2e-2, -1e-2, 0, 1e-2, 2e-2]]
 # 1.) Randomly initialize the critic and actor networks.
 actor = Actor()
 critic = Critic()
@@ -129,8 +129,6 @@ for episode in range(100):
                 # execute input, get reward
                 r = control_env.step(u, gui=False)
                 _X = np.array(control_env.car.X) # next state
-                #buffer.record([X, u, r, _X])
-                #X_est-X?
                 buffer.record([np.concatenate(((X_ - X), (real_env.goal - X)), axis=0), u, r, np.concatenate(((X_ - X), (real_env.goal - _X)), axis=0)])
                 X = _X
                 # if prev_traj is not None:

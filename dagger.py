@@ -1,41 +1,14 @@
 import torch
+import torch.nn.functional as F
 import random
 import numpy as np
 import pygame
+import time
 from pygame.locals import *
 from environment import Environment
 
-
 tau = 0.2
 # pygame.init()
-# clock = pygame.time.Clock()
-
-# keydown handler
-def keydown(event):
-    global paddle1_vel, paddle2_vel, label
-
-    if event.key == K_UP:
-        paddle2_vel = -20
-        label = 2
-    elif event.key == K_DOWN:
-        paddle2_vel = 20
-        label = 1
-    print(label)
-    # elif event.key == K_w:
-    #     paddle1_vel = -8
-    # elif event.key == K_s:
-    #     paddle1_vel = 8
-
-
-# keyup handler
-def keyup(event):
-    global paddle1_vel, paddle2_vel, label
-
-    if event.key in (K_w, K_s):
-        paddle1_vel = 0
-    elif event.key in (K_UP, K_DOWN):
-        paddle2_vel = 0
-        label = 0
 
 class Actor(torch.nn.Module):
     def __init__(self, in_features=6+6, num_actions=5+5, init_weights=None): # X^-X, X*-X
@@ -63,10 +36,10 @@ class Buffer:
     def __init__(self, batch_size=50):
         self.capacity = 100000
         self.counter = 0
-        self.states = np.zeros((self.capacity, 12))
+        self.states = np.zeros((self.capacity, 6))
         self.actions = np.zeros((self.capacity, 2))
         self.rewards = np.zeros((self.capacity, 1)) # rewards not required for dagger
-        self.next_states = np.zeros((self.capacity, 12))
+        self.next_states = np.zeros((self.capacity, 6))
     
     def record(self, observation):
         idx = self.counter % self.capacity
@@ -76,22 +49,47 @@ class Buffer:
         self.next_states[idx] = observation[3]
         self.counter +=1
 
+# combines expert and actor actions (include tau weight later?)
+def getCombinedAction(u_exp_idx, u_act): # gather class probabilities, instead of actor inputs
+    u_exp = np.array([0,0,0,0,0,0,0,0,0,0])
+    u_exp[int(u_exp_idx[0])] = 1
+    u_exp[int(u_exp_idx[1])] = 1 # 5+? (for now doesn't matter, since turning is kinda garbage)
+    # u_act = np.array([0,0,0,0,0,0,0,0,0,0])
+    # u_act[control[0].index(u_act_idx[0])] = 1
+    # u_act[5+control[1].index(u_act_idx[1])] = 1
+    gas = u_exp[0:5] + u_act[0:5]/sum(u_act[0:5])
+    steer = u_exp[5:10] + u_act[5:10]/sum(u_act[5:10])
+    u_comb = np.array([0,0,0,0,0,0,0,0,0,0])
+    u_comb[np.argmax(gas)] = 1
+    u_comb[5+np.argmax(steer)] = 1
+    return u_comb
 
-env = Environment()
+real_env = Environment()
 control = [[-100, -50, 0, 50, 100], [-2e-2, -1e-2, 0, 1e-2, 2e-2]]
 actor = Actor()
 act_opt = torch.optim.Adam(actor.parameters())
-buffer = Buffer()
-for epoch in range(10):
-    config = env.reset()
+# problem
+# need to include a trajectory with various dynamic changes.
+# one is controlled by the actor
+# combined trajectory is propagated forward to get X_-X
+# but this cn be done after the demonstration loop
+
+# demonstration part
+data = []
+num_demonstrations = 2
+for ep in range(num_demonstrations):
+    config_g, config_x, config_p = real_env.reset()
     # getting expert trajectory
     # switch to while until whitespace
-    for t in range(10000):
+    traj_len = 0
+    buffer = Buffer()
+    while True:
         keys = pygame.key.get_pressed()
         steering = [keys[K_1], keys[K_2], keys[K_3], keys[K_4], keys[K_5]]
         gas = [keys[K_6], keys[K_7], keys[K_8], keys[K_9], keys[K_0]]
+        stop = keys[K_SPACE] == 1
         pygame.event.pump()
-        X = env.car.X
+        X = np.array(real_env.car.X)
         if sum(steering) == 0:
             steer_sig = 0
         else:
@@ -101,48 +99,47 @@ for epoch in range(10):
         else:
             gas_sig = control[1][np.argmax(gas)]
         u = [steer_sig, gas_sig]
-        r = env.step(u)
-        _X = env.car.X # what is the error in this case
-        buffer.record([np.concatenate(((X_ - X), (env.goal - X)), axis=0), u, r, np.concatenate(((X_ - X), (env.goal - _X)), axis=0)]) # rewards kinda irrelevant here, including bc why not
-    env.reset(config) # reset env to the previous config
-    # play out the combined trajectory
-    prev_traj = []
-    X_ = X.copy()
-    if prev_traj is not None:
-        X_ = prev_traj[5][0]
-    else:
-        X_ = X
-    traj = []
-    for t in range(10000):
-        if t%5 == 0:
-            # run this 6 timesteps ahead every 5 timesteps to get X_ (estimated X)
-            # for i in range(6):
-            u = actor.forward(torch.Tensor(np.concatenate(((X_ - X), (real_env.goal - X)), axis=0))) # fix the inputs here and further down
-            u = [control[0][torch.argmax(u[:5])], control[1][torch.argmax(u[5:10])]]
-        # and propagate in the real env on every timestep
-
-    # update actor based on the final loss of the combined actor-demonstrator trajectory.
-    actor.backprop(loss)
-    
-    for t in range(10000):
-
-    
-        
-
-# while True:
-#     keys = pygame.key.get_pressed()
-#     thrust = 0
-#     yaw = 0
-#     if keys[K_LEFT]:
-#         yaw = 0.0001
-#     if keys[K_RIGHT]:
-#         yaw = -0.0001
-#     if keys[K_UP]:
-#         thrust = 40
-#     if keys[K_DOWN]:
-#         thrust = -40
-#     if sum(keys) == 0:
-#         print("ey")
-#     else:
-#         print("ey1")
-#     pygame.event.pump()
+        r = real_env.step(u)
+        _X = np.array(real_env.car.X) # what is the error in this case
+        # buffer.record([np.concatenate(((X_ - X), (real_env.goal - X)), axis=0), u, r, np.concatenate(((X_ - X), (real_env.goal - _X)), axis=0)])
+        buffer.record([X, u, r, _X]) # states, rewards and next states kinda irrelevant here, including bc why not
+        traj_len += 1
+        if stop:
+            break
+    time.sleep(1)
+    data.append(buffer)
+    real_env.reset(X=config_x, puddle=config_p) # reset env to the previous config
+# training part
+control_env = Environment()
+for ep in range(num_demonstrations):
+    control_env.reset(noise=False, X=real_env.car.X)
+    buffer = data[ep]
+    prev_traj = None
+    X = np.array(real_env.car.X)
+    for t in range(traj_len):
+        if prev_traj is None:
+            X_ = np.array(real_env.car.X)
+        else:
+            X_ = prev_traj[5][0] # keep the 5 step ahead projection for a more adequate comparison to ddpg
+        if t%5==0:
+            # predict X_ trajectory with the actor on the control environment
+            traj = []
+            for step in range(6):
+                act_opt.zero_grad()
+                print(X_.shape)
+                print(X.shape)
+                u_act = actor.forward(torch.Tensor(np.concatenate(((X_ - X), (real_env.goal - X)), axis=0))) # fix the inputs here and further down
+                # u_act = [control[0][torch.argmax(u_act[:5])], control[1][torch.argmax(u_act[5:10])]]
+                u = getCombinedAction(buffer.actions[t], u_act.detach().numpy())
+                # apply to the control env
+                traj.append([X, u])
+                loss = control_env.step(u)
+                X = control_env.car.X
+                # training here
+                actor.backprop(loss) # ensure gradients are conserved (don't detach)
+            prev_traj = traj
+        u_act = actor.forward(torch.Tensor(np.concatenate(((X_ - X), (real_env.goal - X)), axis=0)))
+        # u_act = [control[0][torch.argmax(u_act[:5])], control[1][torch.argmax(u_act[5:10])]]
+        u = getCombinedAction(buffer.actions[t], u_act.detach().numpy())
+        # apply to the real env
+        loss = real_env.step(u)

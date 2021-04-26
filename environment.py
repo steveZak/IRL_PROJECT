@@ -120,13 +120,17 @@ class Environment:
         reward = np.matmul(self.car.X - self.goal, np.matmul(self.Q, self.car.X - self.goal))
         return reward
     
-    def reset(self, noise=True, X=[200, 800, -np.pi/4, 0.000001, 0, 0]):
+    def reset(self, noise=True, X=[200, 800, -np.pi/4, 0.000001, 0, 0], puddle=None):
         if noise:
-            self.puddle = [[random.random()*50, 50+random.random()*50], [50+random.random()*50, random.random()*50]]
+            if puddle is not None:
+                self.puddle = [[random.random()*50, 50+random.random()*50], [50+random.random()*50, random.random()*50]]
+            else:
+                self.puddle = puddle
         else:
             self.puddle = None
         self.car = Car(X)
         self.goal = [800, 200, np.pi/4, 0, 0, 0]
+        return self.goal, X, puddle
 
     def run(self, gui=True):
         white = [255, 255, 255]
