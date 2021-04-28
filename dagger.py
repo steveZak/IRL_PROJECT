@@ -115,7 +115,6 @@ for ep in range(num_demonstrations):
     time.sleep(1)
     data.append(buffer)
     real_env.reset(X=config_x, goal=config_g, puddle=config_p) # reset env to the previous config
-print("cool")
 pygame.quit()
 # pre-training
 # train on initial dataset

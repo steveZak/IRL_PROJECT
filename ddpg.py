@@ -90,7 +90,7 @@ class Buffer:
 
 # train the model
 _u = []
-control = [[-100, -50, 0, 50, 100], [-2e-2, -1e-2, 0, 1e-2, 2e-2]]
+control = [[-5.0, -2.5, 0, 2.5, 5.0], [-np.pi/3, -np.pi/6, 0, np.pi/6, np.pi/3]]
 # 1.) Randomly initialize the critic and actor networks.
 actor = Actor()
 critic = Critic()
@@ -111,7 +111,7 @@ for episode in range(100):
     prev_traj = None
     print("epoch = " + str(episode))
     for t in range(1000): # timesteps that the model will be actuated for
-        control_env.reset(noise=False, X=real_env.car.X) # places the car in the controller env
+        control_env.reset(noise=False, X=real_env.car.X, goal=real_env.goal) # places the car in the controller env
         X = np.array(control_env.car.X) # state
         X_ = X.copy()
         if prev_traj is not None:
@@ -125,20 +125,13 @@ for episode in range(100):
                 act_opt.zero_grad()
                 cri_opt.zero_grad()
                 u = actor.forward(torch.Tensor(np.concatenate(((X_ - X), (real_env.goal - X)), axis=0))) # fix the inputs here and further down
-                # discretize this.
                 u = [control[0][torch.argmax(u[:5])], control[1][torch.argmax(u[5:10])]]
-                # u[0] += 0.05*(random.random()-0.5)*u[0] # This is the noise bs needed for DDPG, pls tune if too much
-                # u[1] += 0.05*(random.random()-0.5)*u[1]
                 traj.append([X, u])
                 # execute input, get reward
                 r = control_env.step(u, gui=False)
                 _X = np.array(control_env.car.X) # next state
                 buffer.record([np.concatenate(((X_ - X), (real_env.goal - X)), axis=0), u, r, np.concatenate(((X_ - X), (real_env.goal - _X)), axis=0)])
                 X = _X
-                # if prev_traj is not None:
-                #     X_est = prev_traj[i+4][0]
-                # else:
-                #     X_est = _X
                 if buffer.counter<N:
                     idxs = np.random.choice(buffer.counter, buffer.counter)
                 else:
@@ -171,8 +164,8 @@ for episode in range(100):
             prev_traj = traj
             print(r)
         else:
+            # should I propagate forward again separately?
             r = real_env.step(prev_traj[step%5][1]) # here you also see difference between X and X^
             print(r)
-            print(real_env.car.X)
 
 # complete DAgger
