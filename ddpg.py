@@ -10,6 +10,7 @@ class Actor(torch.nn.Module):
         super(Actor, self).__init__()
         self.fc1 = torch.nn.Linear(in_features, 200)
         self.fc2 = torch.nn.Linear(200, num_actions)
+        self.out = torch.nn.Softmax()
         if init_weights is not None:
             self.fc1.weight.data = init_weights[0]
             self.fc2.weight.data = init_weights[1]
@@ -19,12 +20,15 @@ class Actor(torch.nn.Module):
         self.fc2.weight.data = (1-tau)*self.fc2.weight.data + tau*model.fc2.weight.data
 
     def forward(self, X):
-        return self.fc2(self.fc1(X))
+        outs = self.fc2(self.fc1(X))
+        return torch.cat((self.out(outs[torch.LongTensor([0,1,2,3,4])]), self.out(outs[torch.LongTensor([5,6,7,8,9])])), dim=0)
     
     def backprop(self, loss):
         # do backprop
         loss.backward()
         act_opt.step()
+        return loss.item()
+
 
 class Critic(torch.nn.Module):
     def __init__(self, in_state_features=6+6, in_action_features=5+5, init_weights=None): # X^-X, X*-X

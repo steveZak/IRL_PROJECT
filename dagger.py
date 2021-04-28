@@ -32,7 +32,7 @@ class Actor(torch.nn.Module):
         # do backprop
         loss.backward()
         act_opt.step()
-
+        return loss.item()
 
 class Buffer:
     def __init__(self, batch_size=50):
@@ -78,9 +78,9 @@ act_opt = torch.optim.Adam(actor.parameters())
 
 # demonstration part (no adaptation, since there is no control network at this stage and all info is known)
 data = []
-num_demonstrations = 3
+num_demonstrations = 10
 for ep in range(num_demonstrations):
-    config_g, config_x, config_p = real_env.reset()
+    config_g, config_x, config_p = real_env.reset(noise=False)
     # getting expert trajectory
     # switch to while until whitespace
     traj_len = 0
@@ -114,7 +114,7 @@ for ep in range(num_demonstrations):
             break
     time.sleep(1)
     data.append(buffer)
-    real_env.reset(X=config_x, puddle=config_p) # reset env to the previous config
+    real_env.reset(X=config_x, goal=config_g, puddle=config_p) # reset env to the previous config
 print("cool")
 pygame.quit()
 # pre-training
@@ -123,50 +123,50 @@ pygame.quit()
 loss = torch.nn.BCEWithLogitsLoss()
 # loss = torch.nn.MultiLabelSoftMarginLoss()
 # loss = torch.nn.CrossEntropyLoss()
-for i in range(num_demonstrations):
-    buffer = data[i]
-    idxs = list(range(buffer.counter))
-    random.shuffle(idxs)
-    for j in idxs:
-        act_opt.zero_grad()
-        # loss.zero_grad()
-        action_pred = actor.forward(torch.Tensor(buffer.states[j]))
-        print(buffer.actions[j])
-        print(action_pred)
-        actor.backprop(loss(action_pred, torch.Tensor(buffer.actions[j])))
-
+for epoch in range(50):
+    l=0
+    ctr=0
+    for i in range(num_demonstrations):
+        buffer = data[i]
+        idxs = list(range(buffer.counter))
+        random.shuffle(idxs)
+        for j in idxs:
+            act_opt.zero_grad()
+            # loss.zero_grad()
+            action_pred = actor.forward(torch.Tensor(buffer.states[j]))
+            l += actor.backprop(loss(action_pred, torch.Tensor(buffer.actions[j])))
+            ctr += 1
+    print(l/ctr)
 # training on new demonstration and combine the inputs
 # (corrective actions are similar to tamer? - corrective actions (e.g. further left) or another demonstration with true labels based on the current state?)
-# control_env = Environment()
-# for ep in range(num_demonstrations):
-#     control_env.reset(noise=False, X=real_env.car.X)
-#     buffer = data[ep]
-#     prev_traj = None
-#     X = np.array(real_env.car.X)
-#     for t in range(traj_len):
-#         if prev_traj is None:
-#             X_ = np.array(real_env.car.X)
-#         else:
-#             X_ = prev_traj[5][0] # keep the 5 step ahead projection for a more adequate comparison to ddpg
-#         if t%5==0:
-#             # predict X_ trajectory with the actor on the control environment
-#             traj = []
-#             for step in range(6):
-#                 act_opt.zero_grad()
-#                 print(X_.shape)
-#                 print(X.shape)
-#                 u_act = actor.forward(torch.Tensor(np.concatenate(((X_ - X), (real_env.goal - X)), axis=0))) # fix the inputs here and further down
-#                 # u_act = [control[0][torch.argmax(u_act[:5])], control[1][torch.argmax(u_act[5:10])]]
-#                 u = getCombinedAction(buffer.actions[t], u_act.detach().numpy())
-#                 # apply to the control env
-#                 traj.append([X, u])
-#                 loss = control_env.step(u)
-#                 X = control_env.car.X
-#                 # training here
-#                 actor.backprop(loss) # ensure gradients are conserved (don't detach)
-#             prev_traj = traj
-#         u_act = actor.forward(torch.Tensor(np.concatenate(((X_ - X), (real_env.goal - X)), axis=0)))
-#         # u_act = [control[0][torch.argmax(u_act[:5])], control[1][torch.argmax(u_act[5:10])]]
-#         u = getCombinedAction(buffer.actions[t], u_act.detach().numpy())
-#         # apply to the real env
-#         loss = real_env.step(u)
+control_env = Environment()
+for ep in range(num_demonstrations):
+    control_env.reset(noise=False, X=real_env.car.X)
+    buffer = data[ep]
+    prev_traj = None
+    X = np.array(real_env.car.X)
+    for t in range(traj_len):
+        if prev_traj is None:
+            X_ = np.array(real_env.car.X)
+        else:
+            X_ = prev_traj[5][0] # keep the 5 step ahead projection for a more adequate comparison to ddpg
+        if t%5==0:
+            # predict X_ trajectory with the actor on the control environment
+            traj = []
+            for step in range(6):
+                act_opt.zero_grad()
+                u_act = actor.forward(torch.Tensor(np.concatenate(((X_ - X), (real_env.goal - X)), axis=0))) # fix the inputs here and further down
+                # u_act = [control[0][torch.argmax(u_act[:5])], control[1][torch.argmax(u_act[5:10])]]
+                u = getCombinedAction(buffer.actions[t], u_act.detach().numpy())
+                # apply to the control env
+                traj.append([X, u])
+                loss = control_env.step(u)
+                X = control_env.car.X
+                # training here
+                actor.backprop(loss) # ensure gradients are conserved (don't detach)
+            prev_traj = traj
+        u_act = actor.forward(torch.Tensor(np.concatenate(((X_ - X), (real_env.goal - X)), axis=0)))
+        # u_act = [control[0][torch.argmax(u_act[:5])], control[1][torch.argmax(u_act[5:10])]]
+        u = getCombinedAction(buffer.actions[t], u_act.detach().numpy())
+        # apply to the real env
+        loss = real_env.step(u)

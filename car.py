@@ -64,8 +64,8 @@ class Car:
                  _tht,
                  __x,
                  __y,
-                 delta*self.lf*np.sqrt(self.X[3]**2+self.X[4]**2)
+                 0
                 ]
         _X = np.multiply(delta_t, X_dot)
         self.X += np.multiply(delta_t, X_dot)
-        # self.X[5] = delta*self.lf*np.sqrt(self.X[3]**2+self.X[4]**2)
+        self.X[5] = delta*self.lf*np.sqrt(self.X[3]**2+self.X[4]**2)

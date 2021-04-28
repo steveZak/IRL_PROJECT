@@ -11,7 +11,6 @@ clock = pygame.time.Clock()
 icon = pygame.image.load('_car.bmp')
 w, h = icon.get_size()
 pivot= [w/2, h/2]
-pos = [0, 1000]
 
 
 def rot_center(image, angle, x, y):
@@ -48,8 +47,6 @@ def blitRotate(surf, image, pos, originPos, angle):
 def getHumanControl():
     yaw = 0
     thrust = -20
-    # print(pygame.K_LEFT)
-    # print(pygame.key.get_pressed()[pygame.K_LEFT])
     keys = pygame.key.get_pressed()
     print(keys[K_LEFT])
     if keys[K_LEFT]:
@@ -61,18 +58,6 @@ def getHumanControl():
     if keys[K_DOWN]:
         thrust = -40
     print(thrust)
-    # for event in pygame.event.get():
-    #     # print(event)
-    #     if event.type == pygame.KEYDOWN:
-    #         if event.key == pygame.K_LEFT:
-    #             yaw = 0.0001
-    #         elif event.key == pygame.K_RIGHT:
-    #             yaw =-0.0001
-    #         if event.key == pygame.K_UP:
-    #             thrust = -40
-    #         elif event.key == pygame.K_DOWN:
-    #             thrust = 40
-    # print(thrust)
     return thrust, yaw
 
 class Environment:
@@ -85,42 +70,33 @@ class Environment:
     def step(self, u, gui = True):
         if self.puddle is not None and self.car.X[0] > self.puddle[0][0] and self.car.X[0] < self.puddle[0][1] and self.car.X[1] > self.puddle[1][0] and self.car.X[1] < self.puddle[1][1]:
             self.car.step(u, fr=0.2)
-            # print("in a puddle")
         else:
             self.car.step(u, fr=0.7)
         if gui:
             white = [255, 255, 255]
             screen.fill(white)
-            positions = list()
-            screen.fill(white)
             # pygame.draw.circle(screen, [255, 0, 0], (200, 800), 20)
             # blue goal
             pygame.draw.circle(screen, [0, 0, 255], (self.goal[0], self.goal[1]), 20)
             # red start
-            pygame.draw.circle(screen, [255, 0, 0], (200, 800), 20)
-            # u = [1, random.random()*2] # 0.1/0.2-0.1
-            # u = getHumanControl()
+            pygame.draw.circle(screen, [255, 0, 0], (self.start[0], self.start[1]), 20)
             pygame.event.pump()
-            # get NN control
             # apply step
-            x = self.car.X[0]# reversed
+            x = self.car.X[0]
             y = self.car.X[1]
             sin_a, cos_a = math.sin(self.car.X[2]), math.cos(self.car.X[2])
             min_x, min_y = min([0, sin_a*h, cos_a*w, sin_a*h + cos_a*w]), max([0, sin_a*w, -cos_a*h, sin_a*w - cos_a*h])
-            # origin = (pos[0] - pivot[0] + min_x - x, pos[1] - pivot[1] - min_y + y)
-            # _ray = (pos[0] + min_x - x, pos[1] - min_y + y)
             origin = (pivot[0] - min_x + x, pivot[1] - min_y + y)
             _ray = (min_x + x, min_y + y)
             rotated_image = pygame.transform.rotate(icon, -self.car.X[2]*180/np.pi)
-            screen.blit(rotated_image, origin)
-            positions.append(_ray)
+            screen.blit(rotated_image, origin) # origin
             pygame.display.update()
             pygame.time.delay(1)
             pygame.display.flip()
         reward = np.matmul(self.car.X - self.goal, np.matmul(self.Q, self.car.X - self.goal))
         return reward
     
-    def reset(self, noise=True, X=[200, 800, -np.pi/4, 0.000001, 0, 0], puddle=None):
+    def reset(self, noise=True, X=None, goal=None, puddle=None):
         if noise:
             if puddle is not None:
                 self.puddle = [[random.random()*50, 50+random.random()*50], [50+random.random()*50, random.random()*50]]
@@ -128,41 +104,52 @@ class Environment:
                 self.puddle = puddle
         else:
             self.puddle = None
-        self.car = Car(X)
-        self.goal = [800, 200, np.pi/4, 0, 0, 0]
-        return self.goal, X, puddle
+        if X is None:
+            x = 200+600*random.random()
+            y = 200+600*random.random()
+            x_g = 200+600*random.random()
+            y_g = 200+600*random.random()
+            tht = np.arctan2([y_g-y], [x_g-x])[0]
+            self.car = Car([x, y, tht, 0.000001, 0, 0])
+            self.start = [x, y, tht, 0.000001, 0, 0]
+            self.goal = [x_g, y_g, tht, 0, 0, 0]
+        else:
+            self.car = Car(X)
+            self.start = X
+            self.goal = goal
+        return self.goal, self.car.X, self.puddle
 
-    def run(self, gui=True):
-        white = [255, 255, 255]
-        screen.fill(white)
-        positions = list()
-        for i in range(5000):
-            # get human control
-            u = [-10, 0.0001]
-            self.step(u)
-            if gui:
-                screen.fill(white)
-                pygame.draw.circle(screen, [255, 0, 0], (200, 800), 20)
-                pygame.draw.circle(screen, [0, 0, 255], (800, 200), 20)
-                # u = [1, random.random()*2] # 0.1/0.2-0.1
-                # u = getHumanControl()
-                pygame.event.pump()
-                # get NN control
-                # apply step
-                x = self.car.X[0]
-                y = self.car.X[1]
-                sin_a, cos_a = math.sin(self.car.X[2]), math.cos(self.car.X[2])
-                min_x, min_y = min([0, sin_a*h, cos_a*w, sin_a*h + cos_a*w]), max([0, sin_a*w, -cos_a*h, sin_a*w - cos_a*h])
-                # origin = (pos[0] - pivot[0] + min_x - x, pos[1] - pivot[1] - min_y + y)
-                # _ray = (pos[0] + min_x - x, pos[1] - min_y + y)
-                origin = (pivot[0] - min_x + x, pivot[1] - min_y + y)
-                _ray = (min_x + x, min_y + y)
-                rotated_image = pygame.transform.rotate(icon, self.car.X[2]*180/np.pi)
-                screen.blit(rotated_image, origin)
-                positions.append(_ray)
-                pygame.display.update()
-                pygame.time.delay(1)
-                pygame.display.flip()
+    # def run(self, gui=True):
+    #     white = [255, 255, 255]
+    #     screen.fill(white)
+    #     positions = list()
+    #     for i in range(5000):
+    #         # get human control
+    #         u = [-10, 0.0001]
+    #         self.step(u)
+    #         if gui:
+    #             screen.fill(white)
+    #             pygame.draw.circle(screen, [255, 0, 0], (200, 800), 20)
+    #             pygame.draw.circle(screen, [0, 0, 255], (800, 200), 20)
+    #             # u = [1, random.random()*2] # 0.1/0.2-0.1
+    #             # u = getHumanControl()
+    #             pygame.event.pump()
+    #             # get NN control
+    #             # apply step
+    #             x = self.car.X[0]
+    #             y = self.car.X[1]
+    #             sin_a, cos_a = math.sin(self.car.X[2]), math.cos(self.car.X[2])
+    #             min_x, min_y = min([0, sin_a*h, cos_a*w, sin_a*h + cos_a*w]), max([0, sin_a*w, -cos_a*h, sin_a*w - cos_a*h])
+    #             # origin = (pos[0] - pivot[0] + min_x - x, pos[1] - pivot[1] - min_y + y)
+    #             # _ray = (pos[0] + min_x - x, pos[1] - min_y + y)
+    #             origin = (pivot[0] - min_x + x, pivot[1] - min_y + y)
+    #             _ray = (min_x + x, min_y + y)
+    #             rotated_image = pygame.transform.rotate(icon, self.car.X[2]*180/np.pi)
+    #             screen.blit(rotated_image, origin)
+    #             positions.append(_ray)
+    #             pygame.display.update()
+    #             pygame.time.delay(1)
+    #             pygame.display.flip()
 
 # env = Environment()
 # env.reset()
