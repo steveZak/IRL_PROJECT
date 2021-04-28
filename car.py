@@ -86,7 +86,7 @@ class Car:
         self.length = 4
         self.max_acceleration = 5.0
         self.max_steering = np.pi/4
-        self.max_velocity = 20
+        self.max_velocity = 50
         self.brake_deceleration = 10
         self.free_deceleration = 2
 
@@ -94,7 +94,11 @@ class Car:
         # self.steering = 0.0
         self.X = X
 
-    def step(self, u, dt, fr=0.9):
+    def step(self, u, dt, skid=False):
+        if skid:
+            if u[0] != 0:
+                u[0] = 1.5*u[0]/abs(u[0]) # skidding caps acceleration at 1.5
+        print(u)
         self.velocity += (u[0] * dt, 0)
         self.velocity.x = max(-self.max_velocity, min(self.velocity.x, self.max_velocity))
         if u[1]:

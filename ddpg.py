@@ -113,24 +113,26 @@ for episode in range(100):
     for t in range(1000): # timesteps that the model will be actuated for
         control_env.reset(noise=False, X=real_env.car.X, goal=real_env.goal) # places the car in the controller env
         X = np.array(control_env.car.X) # state
-        X_ = X.copy()
+        X_hat = X.copy()
         if prev_traj is not None:
-            X_ = prev_traj[5][0]
+            X_hat = prev_traj[5][0]
         else:
-            X_ = X
+            X_hat = X
         traj = []
         if t%5 == 0:
             # only do this once every 5 steps
             for step in range(6): # calculates X, u for the planned trajectory.
                 act_opt.zero_grad()
                 cri_opt.zero_grad()
-                u = actor.forward(torch.Tensor(np.concatenate(((X_ - X), (real_env.goal - X)), axis=0))) # fix the inputs here and further down
+                u = actor.forward(torch.Tensor(np.concatenate(((X_hat - X), (real_env.goal - X)), axis=0))) # fix the inputs here and further down
                 u = [control[0][torch.argmax(u[:5])], control[1][torch.argmax(u[5:10])]]
                 traj.append([X, u])
+                print(u)
+                print(np.concatenate(((X_hat - X), (real_env.goal - X)), axis=0))
                 # execute input, get reward
                 r = control_env.step(u, gui=False)
                 _X = np.array(control_env.car.X) # next state
-                buffer.record([np.concatenate(((X_ - X), (real_env.goal - X)), axis=0), u, r, np.concatenate(((X_ - X), (real_env.goal - _X)), axis=0)])
+                buffer.record([np.concatenate(((X_hat - X), (real_env.goal - X)), axis=0), u, r, np.concatenate(((X_hat - X), (real_env.goal - _X)), axis=0)])
                 X = _X
                 if buffer.counter<N:
                     idxs = np.random.choice(buffer.counter, buffer.counter)
@@ -166,6 +168,6 @@ for episode in range(100):
         else:
             # should I propagate forward again separately?
             r = real_env.step(prev_traj[step%5][1]) # here you also see difference between X and X^
-            print(r)
+            # print(r)
 
 # complete DAgger

@@ -73,14 +73,14 @@ act_opt = torch.optim.Adam(actor.parameters())
 # problem
 # need to include a trajectory with various dynamic changes.
 # one is controlled by the actor
-# combined trajectory is propagated forward to get X_-X
+# combined trajectory is propagated forward to get X_hat-X
 # but this cn be done after the demonstration loop
 
 # demonstration part (no adaptation, since there is no control network at this stage and all info is known)
 data = []
 num_demonstrations = 10
 for ep in range(num_demonstrations):
-    config_g, config_x, config_p = real_env.reset(noise=False)
+    config_g, config_x, config_p = real_env.reset() # noise=False
     # getting expert trajectory
     # switch to while until whitespace
     traj_len = 0
@@ -102,10 +102,7 @@ for ep in range(num_demonstrations):
             gas_sig = control[0][np.argmax(gas)]
         u = [gas_sig, steer_sig]
         r = real_env.step(u)
-        _X = np.array(real_env.car.X) # what is the error in this case
-        # u_onehot = [0,0,0,0,0,0,0,0,0,0]
-        # u_onehot[control[0].index(u[0])]=1
-        # u_onehot[5+control[1].index(u[1])]=1
+        _X = np.array(real_env.car.X)
         gas.extend(steering)
         buffer.record([np.concatenate(((X - X), (real_env.goal - X)), axis=0), gas, r, np.concatenate(((_X - _X), (real_env.goal - _X)), axis=0)])
         # buffer.record([, u, r, _X]) # rewards kinda irrelevant here, including bc why not
@@ -114,7 +111,7 @@ for ep in range(num_demonstrations):
             break
     time.sleep(1)
     data.append(buffer)
-    real_env.reset(X=config_x, goal=config_g, puddle=config_p) # reset env to the previous config
+    real_env.reset(X=config_x, goal=config_g, icepatch=config_p) # reset env to the previous config
 pygame.quit()
 # pre-training
 # train on initial dataset
@@ -146,15 +143,15 @@ for ep in range(num_demonstrations):
     X = np.array(real_env.car.X)
     for t in range(traj_len):
         if prev_traj is None:
-            X_ = np.array(real_env.car.X)
+            X_hat = np.array(real_env.car.X)
         else:
-            X_ = prev_traj[5][0] # keep the 5 step ahead projection for a more adequate comparison to ddpg
+            X_hat = prev_traj[5][0] # keep the 5 step ahead projection for a more adequate comparison to ddpg
         if t%5==0:
-            # predict X_ trajectory with the actor on the control environment
+            # predict X_hat trajectory with the actor on the control environment
             traj = []
             for step in range(6):
                 act_opt.zero_grad()
-                u_act = actor.forward(torch.Tensor(np.concatenate(((X_ - X), (real_env.goal - X)), axis=0))) # fix the inputs here and further down
+                u_act = actor.forward(torch.Tensor(np.concatenate(((X_hat - X), (real_env.goal - X)), axis=0))) # fix the inputs here and further down
                 # u_act = [control[0][torch.argmax(u_act[:5])], control[1][torch.argmax(u_act[5:10])]]
                 u = getCombinedAction(buffer.actions[t], u_act.detach().numpy())
                 # apply to the control env
@@ -164,7 +161,7 @@ for ep in range(num_demonstrations):
                 # training here
                 actor.backprop(loss) # ensure gradients are conserved (don't detach)
             prev_traj = traj
-        u_act = actor.forward(torch.Tensor(np.concatenate(((X_ - X), (real_env.goal - X)), axis=0)))
+        u_act = actor.forward(torch.Tensor(np.concatenate(((X_hat - X), (real_env.goal - X)), axis=0)))
         # u_act = [control[0][torch.argmax(u_act[:5])], control[1][torch.argmax(u_act[5:10])]]
         u = getCombinedAction(buffer.actions[t], u_act.detach().numpy())
         # apply to the real env

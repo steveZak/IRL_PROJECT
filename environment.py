@@ -56,19 +56,22 @@ class Environment:
         self.Q = np.array([[-1, 0, 0, 0, 0, 0],[0, -1, 0, 0, 0, 0],[0, 0, 0, 0, 0, 0],[0, 0, 0, -1, 0, 0],[0, 0, 0, 0, -1, 0],[0, 0, 0, 0, 0, 0]]) 
     
     def step(self, u, gui = True):
-        if self.puddle is not None and self.car.X[0] > self.puddle[0][0] and self.car.X[0] < self.puddle[0][1] and self.car.X[1] > self.puddle[1][0] and self.car.X[1] < self.puddle[1][1]:
-            self.car.step(u, self.dt, fr=0.2)
+        if self.icepatch is not None and self.car.X[0] > self.icepatch[0][0] and self.car.X[0] < self.icepatch[0][1] and self.car.X[1] > self.icepatch[1][0] and self.car.X[1] < self.icepatch[1][1]:
+            self.car.step(u, self.dt, skid=True)
+            print("in a icepatch")
         else:
-            self.car.step(u, self.dt, fr=0.7)
+            self.car.step(u, self.dt, skid=False)
         if gui:
             white = [255, 255, 255]
             self.screen.fill(white)
-            # pygame.draw.circle(screen, [255, 0, 0], (200, 800), 20)
-            # blue goal
-            pygame.draw.circle(self.screen, [0, 0, 255], (self.goal[0], self.goal[1]), 20)
+            # pygame.event.pump()
+            # icepatch
+            if self.icepatch is not None:
+                pygame.draw.rect(self.screen, [0, 0, 255], (self.icepatch[0][0], self.icepatch[1][0], self.icepatch[0][1]-self.icepatch[0][0], self.icepatch[1][1]-self.icepatch[1][0]))
+            # purple goal
+            pygame.draw.circle(self.screen, [255, 0, 255], (self.goal[0], self.goal[1]), 20)
             # red start
             pygame.draw.circle(self.screen, [255, 0, 0], (self.start[0], self.start[1]), 20)
-            # pygame.event.pump()
             # apply step
             # print(self.car.X)
             x = self.car.X[0]
@@ -81,19 +84,19 @@ class Environment:
         reward = np.matmul(self.car.X - self.goal, np.matmul(self.Q, self.car.X - self.goal))
         return reward
     
-    def reset(self, noise=True, X=None, goal=None, puddle=None):
+    def reset(self, noise=True, X=None, goal=None, icepatch=None):
         if noise:
-            if puddle is not None:
-                self.puddle = [[random.random()*50, 50+random.random()*50], [50+random.random()*50, random.random()*50]]
+            if icepatch is None:
+                self.icepatch = [[300+(random.random()*100), 500+random.random()*100], [300+(random.random()*100), 500+random.random()*100]]
             else:
-                self.puddle = puddle
+                self.icepatch = icepatch
         else:
-            self.puddle = None
+            self.icepatch = None
         if X is None:
-            x = 200+600*random.random()
-            y = 200+600*random.random()
-            x_g = 200+600*random.random()
-            y_g = 200+600*random.random()
+            x = 100+800*random.random()
+            y = 100+800*random.random()
+            x_g = 100+800*random.random()
+            y_g = 100+800*random.random()
             tht = -(np.arctan2([y_g-y], [x_g-x])[0]+random.random()*np.pi/6)*180/np.pi
             self.car = Car([x, y, tht, 0, 0, 0])
             self.start = np.array([x, y, tht, 0, 0, 0])
@@ -102,4 +105,4 @@ class Environment:
             self.car = Car(X)
             self.start = X
             self.goal = goal
-        return self.goal, self.car.X, self.puddle
+        return self.goal, self.car.X, self.icepatch
