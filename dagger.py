@@ -67,7 +67,7 @@ def getCombinedAction(u_exp_idx, u_act): # gather class probabilities, instead o
     return u_comb
 
 real_env = Environment()
-control = [[-100, -50, 0, 50, 100], [-2e-2, -1e-2, 0, 1e-2, 2e-2]]
+control = [[-5.0, -2.5, 0, 2.5, 5.0], [-np.pi/3, -np.pi/6, 0, np.pi/6, np.pi/3]]
 actor = Actor()
 act_opt = torch.optim.Adam(actor.parameters())
 # problem
