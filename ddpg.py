@@ -2,14 +2,16 @@ import torch
 import random
 import numpy as np
 from environment import Environment
-
+import matplotlib.pyplot as plt
 tau = 0.005
 
 class Actor(torch.nn.Module):
     def __init__(self, in_features=6+6, num_actions=5+5, init_weights=None): # X^-X, X*-X
         super(Actor, self).__init__()
         self.fc1 = torch.nn.Linear(in_features, 200)
+        self.drop1 = torch.nn.Dropout()
         self.fc2 = torch.nn.Linear(200, num_actions)
+        self.drop2 = torch.nn.Dropout()
         self.out = torch.nn.Softmax()
         if init_weights is not None:
             self.fc1.weight.data = init_weights[0]
@@ -20,7 +22,7 @@ class Actor(torch.nn.Module):
         self.fc2.weight.data = (1-tau)*self.fc2.weight.data + tau*model.fc2.weight.data
 
     def forward(self, X):
-        outs = self.fc2(self.fc1(X))
+        outs = self.drop2(self.fc2(self.drop1(self.fc1(X))))
         return torch.cat((self.out(outs[torch.LongTensor([0,1,2,3,4])]), self.out(outs[torch.LongTensor([5,6,7,8,9])])), dim=0)
     
     def backprop(self, loss):
@@ -99,17 +101,20 @@ target_actor = Actor()
 target_critic = Critic()
 # 3.) Initialize replay buffer
 buffer = Buffer()
-real_env = Environment()
+real_env = Environment(gui=False)
 # 3a.) Initialize some params
 act_opt = torch.optim.Adam(actor.parameters())
 cri_opt = torch.optim.Adam(critic.parameters())
 N = 50
+rewards = list()
+goal, state, icepatch = real_env.reset()
 for episode in range(100):
     # Resets initial state
-    real_env.reset()
+    real_env.reset(X=state, goal=goal, icepatch=icepatch)
     control_env = Environment(gui=False)
     prev_traj = None
     print("epoch = " + str(episode))
+    rw = 0
     for t in range(1000): # timesteps that the model will be actuated for
         control_env.reset(noise=False, X=real_env.car.X, goal=real_env.goal) # places the car in the controller env
         X = np.array(control_env.car.X) # state
@@ -127,8 +132,6 @@ for episode in range(100):
                 u = actor.forward(torch.Tensor(np.concatenate(((X_hat - X), (real_env.goal - X)), axis=0))) # fix the inputs here and further down
                 u = [control[0][torch.argmax(u[:5])], control[1][torch.argmax(u[5:10])]]
                 traj.append([X, u])
-                print(u)
-                print(np.concatenate(((X_hat - X), (real_env.goal - X)), axis=0))
                 # execute input, get reward
                 r = control_env.step(u, gui=False)
                 _X = np.array(control_env.car.X) # next state
@@ -157,17 +160,22 @@ for episode in range(100):
                     a = actor.forward(torch.Tensor(buffer.states[i]))
                     L -= critic.forward(torch.Tensor(buffer.states[i]), a)
                 L/=len(idxs)
+                rw+=L
                 actor.backprop(L)
                 # update targets
                 target_critic.update(critic)
                 target_actor.update(actor)
             # actually apply the action
-            r = real_env.step(u)
+            r = real_env.step(u, gui=False)
             prev_traj = traj
-            print(r)
         else:
             # should I propagate forward again separately?
-            r = real_env.step(prev_traj[step%5][1]) # here you also see difference between X and X^
-            # print(r)
-
+            r = real_env.step(prev_traj[step%5][1], gui=False) # here you also see difference between X and X^
+            # if r<rw:
+            #     rw = r
+    print(rw)
+    rewards.append(rw/t)
+torch.save(target_actor.state_dict(), "actor.pt")
+torch.save(target_critic.state_dict(), "critic.pt")
+# plt.plot(np.array(rewards))
 # complete DAgger

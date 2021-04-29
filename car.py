@@ -98,7 +98,6 @@ class Car:
         if skid:
             if u[0] != 0:
                 u[0] = 1.5*u[0]/abs(u[0]) # skidding caps acceleration at 1.5
-        print(u)
         self.velocity += (u[0] * dt, 0)
         self.velocity.x = max(-self.max_velocity, min(self.velocity.x, self.max_velocity))
         if u[1]:
@@ -108,6 +107,6 @@ class Car:
             angular_velocity = 0
 
         self.position += self.velocity.rotate(-self.angle) * dt
-        self.angle += angular_velocity * dt
+        self.angle += angular_velocity*dt
         self.X = np.array([self.position.x, self.position.y, self.angle, self.velocity.x, self.velocity.y, 0])
         # print(self.X)

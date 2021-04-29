@@ -42,13 +42,13 @@ class Environment:
     # 100 x 100 map
     def __init__(self, gui=True):
         pygame.init()
-        self.screen = pygame.display.set_mode((1000, 1000))
-        self.icon = pygame.image.load('_car.bmp')
         if gui:
+            self.screen = pygame.display.set_mode((1000, 1000))
+            self.icon = pygame.image.load('_car.bmp')
             self.icon = self.icon.convert() # now you can convert
-        # clock = pygame.time.Clock()
-        w, h = self.icon.get_size()
-        pivot= [w/2, h/2]
+            # clock = pygame.time.Clock()
+            w, h = self.icon.get_size()
+            pivot= [w/2, h/2]
         self.clock = pygame.time.Clock()
         # self.dt = self.clock.get_time() / 1000
         self.dt = 0.05
@@ -58,7 +58,6 @@ class Environment:
     def step(self, u, gui = True):
         if self.icepatch is not None and self.car.X[0] > self.icepatch[0][0] and self.car.X[0] < self.icepatch[0][1] and self.car.X[1] > self.icepatch[1][0] and self.car.X[1] < self.icepatch[1][1]:
             self.car.step(u, self.dt, skid=True)
-            print("in a icepatch")
         else:
             self.car.step(u, self.dt, skid=False)
         if gui:
@@ -83,7 +82,7 @@ class Environment:
             self.clock.tick(60)
         reward = np.matmul(self.car.X - self.goal, np.matmul(self.Q, self.car.X - self.goal))
         return reward
-    
+
     def reset(self, noise=True, X=None, goal=None, icepatch=None):
         if noise:
             if icepatch is None:
