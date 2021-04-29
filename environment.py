@@ -60,6 +60,10 @@ class Environment:
             self.car.step(u, self.dt, skid=True)
         else:
             self.car.step(u, self.dt, skid=False)
+        if self.blowout is not None and self.car.X[0] > self.blowout[0][0] and self.car.X[0] < self.blowout[0][1] and self.car.X[1] > self.blowout[1][0] and self.car.X[1] < self.blowout[1][1]:
+            self.car.step(u, self.dt, blowout=True)
+        else:
+            self.car.step(u, self.dt, blowout=False)
         if gui:
             white = [255, 255, 255]
             self.screen.fill(white)
@@ -67,6 +71,8 @@ class Environment:
             # icepatch
             if self.icepatch is not None:
                 pygame.draw.rect(self.screen, [0, 0, 255], (self.icepatch[0][0], self.icepatch[1][0], self.icepatch[0][1]-self.icepatch[0][0], self.icepatch[1][1]-self.icepatch[1][0]))
+            if self.blowout is not None:
+                pygame.draw.rect(self.screen, [0, 255, 0], (self.blowout[0][0], self.blowout[1][0], self.blowout[0][1]-self.blowout[0][0], self.blowout[1][1]-self.blowout[1][0]))
             # purple goal
             pygame.draw.circle(self.screen, [255, 0, 255], (self.goal[0], self.goal[1]), 20)
             # red start
@@ -83,14 +89,21 @@ class Environment:
         reward = np.matmul(self.car.X - self.goal, np.matmul(self.Q, self.car.X - self.goal))
         return reward
 
-    def reset(self, noise=True, X=None, goal=None, icepatch=None):
+    def reset(self, noise=True, X=None, goal=None, icepatch=None, blowout=None):
         if noise:
             if icepatch is None:
                 self.icepatch = [[300+(random.random()*100), 500+random.random()*100], [300+(random.random()*100), 500+random.random()*100]]
             else:
                 self.icepatch = icepatch
+            if blowout is None:
+                x = random.random()*900
+                y = random.random()*900
+                self.blowout = [[300+(random.random()*100), 500+random.random()*100], [300+(random.random()*100), 500+random.random()*100]]
+            else:
+                self.blowout = blowout
         else:
             self.icepatch = None
+            self.blowout = None
         if X is None:
             x = 100+800*random.random()
             y = 100+800*random.random()
@@ -104,4 +117,4 @@ class Environment:
             self.car = Car(X)
             self.start = X
             self.goal = goal
-        return self.goal, self.car.X, self.icepatch
+        return self.goal, self.car.X, self.icepatch, self.blowout

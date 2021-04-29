@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 tau = 0.005
 
 class Actor(torch.nn.Module):
-    def __init__(self, in_features=6+6, num_actions=5+5, init_weights=None): # X^-X, X*-X
+    def __init__(self, in_features=6+6, num_actions=3+3, init_weights=None): # X^-X, X*-X
         super(Actor, self).__init__()
         self.fc1 = torch.nn.Linear(in_features, 200)
         self.drop1 = torch.nn.Dropout()
@@ -23,7 +23,7 @@ class Actor(torch.nn.Module):
 
     def forward(self, X):
         outs = self.drop2(self.fc2(self.drop1(self.fc1(X))))
-        return torch.cat((self.out(outs[torch.LongTensor([0,1,2,3,4])]), self.out(outs[torch.LongTensor([5,6,7,8,9])])), dim=0)
+        return torch.cat((self.out(outs[torch.LongTensor([0,1,2])]), self.out(outs[torch.LongTensor([3,4,5])])), dim=0)
     
     def backprop(self, loss):
         # do backprop
@@ -33,7 +33,7 @@ class Actor(torch.nn.Module):
 
 
 class Critic(torch.nn.Module):
-    def __init__(self, in_state_features=6+6, in_action_features=5+5, init_weights=None): # X^-X, X*-X
+    def __init__(self, in_state_features=6+6, in_action_features=3+3, init_weights=None): # X^-X, X*-X
         super(Critic, self).__init__()
         self.fc1 = torch.nn.Linear(in_state_features, 32)
         self.fc2 = torch.nn.Linear(32, 16)
@@ -92,7 +92,7 @@ class Buffer:
 
 # train the model
 _u = []
-control = [[-5.0, -2.5, 0, 2.5, 5.0], [-np.pi/3, -np.pi/6, 0, np.pi/6, np.pi/3]]
+control = [[-5.0, 0, 5.0], [-np.pi/3, 0, np.pi/3]]
 # 1.) Randomly initialize the critic and actor networks.
 actor = Actor()
 critic = Critic()
@@ -107,10 +107,11 @@ act_opt = torch.optim.Adam(actor.parameters())
 cri_opt = torch.optim.Adam(critic.parameters())
 N = 50
 rewards = list()
-goal, state, icepatch = real_env.reset()
+goal, state, icepatch, blowout = real_env.reset()
 for episode in range(100):
     # Resets initial state
-    real_env.reset(X=state, goal=goal, icepatch=icepatch)
+    # real_env.reset(X=state, goal=goal, icepatch=icepatch, blowout=blowout)
+    real_env.reset()
     control_env = Environment(gui=False)
     prev_traj = None
     print("epoch = " + str(episode))
@@ -130,7 +131,7 @@ for episode in range(100):
                 act_opt.zero_grad()
                 cri_opt.zero_grad()
                 u = actor.forward(torch.Tensor(np.concatenate(((X_hat - X), (real_env.goal - X)), axis=0))) # fix the inputs here and further down
-                u = [control[0][torch.argmax(u[:5])], control[1][torch.argmax(u[5:10])]]
+                u = [control[0][torch.argmax(u[:3])], control[1][torch.argmax(u[3:6])]]
                 traj.append([X, u])
                 # execute input, get reward
                 r = control_env.step(u, gui=False)
@@ -147,9 +148,9 @@ for episode in range(100):
                     a = target_actor.forward(torch.Tensor(buffer.next_states[i]))
                     y_i = buffer.rewards[i][0] + 0.99*target_critic.forward(torch.Tensor(buffer.next_states[i]), torch.Tensor(a))
                     _a = buffer.actions[i]
-                    action = [0,0,0,0,0,0,0,0,0,0] # should I just use a from above?
+                    action = [0,0,0,0,0,0] # should I just use a from above?
                     action[control[0].index(_a[0])] = 1
-                    action[5 + control[1].index(_a[1])] = 1
+                    action[3 + control[1].index(_a[1])] = 1
                     L += (y_i - critic.forward(torch.Tensor(buffer.states[i]), torch.Tensor(action)))**2
                 L /= len(idxs)
                 # update critic
@@ -160,13 +161,13 @@ for episode in range(100):
                     a = actor.forward(torch.Tensor(buffer.states[i]))
                     L -= critic.forward(torch.Tensor(buffer.states[i]), a)
                 L/=len(idxs)
-                rw+=L
                 actor.backprop(L)
                 # update targets
                 target_critic.update(critic)
                 target_actor.update(actor)
             # actually apply the action
             r = real_env.step(u, gui=False)
+            rw+=r
             prev_traj = traj
         else:
             # should I propagate forward again separately?

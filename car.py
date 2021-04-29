@@ -94,10 +94,17 @@ class Car:
         # self.steering = 0.0
         self.X = X
 
-    def step(self, u, dt, skid=False):
+    def step(self, u, dt, skid=False, blowout=False):
         if skid:
             if u[0] != 0:
                 u[0] = 1.5*u[0]/abs(u[0]) # skidding caps acceleration at 1.5
+        if blowout:
+            if u[0] != 0:
+                if u[0]>0:# blowout causes deceleration
+                    u[0] = u[0]-2
+                else:
+                    u[0] = u[0]+2
+            u[1] = u[1]+np.pi/6 # as well as right turn
         self.velocity += (u[0] * dt, 0)
         self.velocity.x = max(-self.max_velocity, min(self.velocity.x, self.max_velocity))
         if u[1]:
