@@ -109,7 +109,7 @@ class Environment:
             y = 100+800*random.random()
             x_g = 100+800*random.random()
             y_g = 100+800*random.random()
-            tht = -(np.arctan2([y_g-y], [x_g-x])[0]+random.random()*np.pi/6)*180/np.pi
+            tht = -(np.arctan2([y_g-y], [x_g-x])[0]+random.random()*np.pi/5-np.pi/10)*180/np.pi
             self.car = Car([x, y, tht, 0, 0, 0])
             self.start = np.array([x, y, tht, 0, 0, 0])
             self.goal = np.array([x_g, y_g, tht, 0, 0, 0])

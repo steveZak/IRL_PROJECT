@@ -108,74 +108,81 @@ cri_opt = torch.optim.Adam(critic.parameters())
 N = 50
 rewards = list()
 goal, state, icepatch, blowout = real_env.reset()
-for episode in range(100):
-    # Resets initial state
-    # real_env.reset(X=state, goal=goal, icepatch=icepatch, blowout=blowout)
-    real_env.reset()
-    control_env = Environment(gui=False)
-    prev_traj = None
-    print("epoch = " + str(episode))
-    rw = 0
-    for t in range(1000): # timesteps that the model will be actuated for
-        control_env.reset(noise=False, X=real_env.car.X, goal=real_env.goal) # places the car in the controller env
-        X = np.array(control_env.car.X) # state
-        X_hat = X.copy()
-        if prev_traj is not None:
-            X_hat = prev_traj[5][0]
-        else:
-            X_hat = X
-        traj = []
-        if t%5 == 0:
-            # only do this once every 5 steps
-            for step in range(6): # calculates X, u for the planned trajectory.
-                act_opt.zero_grad()
-                cri_opt.zero_grad()
-                u = actor.forward(torch.Tensor(np.concatenate(((X_hat - X), (real_env.goal - X)), axis=0))) # fix the inputs here and further down
-                u = [control[0][torch.argmax(u[:3])], control[1][torch.argmax(u[3:6])]]
-                traj.append([X, u])
-                # execute input, get reward
-                r = control_env.step(u, gui=False)
-                _X = np.array(control_env.car.X) # next state
-                buffer.record([np.concatenate(((X_hat - X), (real_env.goal - X)), axis=0), u, r, np.concatenate(((X_hat - X), (real_env.goal - _X)), axis=0)])
-                X = _X
-                if buffer.counter<N:
-                    idxs = np.random.choice(buffer.counter, buffer.counter)
-                else:
-                    idxs = np.random.choice(buffer.counter, N)
-                # update critic by minimising L
-                L = 0
-                for i in idxs:
-                    a = target_actor.forward(torch.Tensor(buffer.next_states[i]))
-                    y_i = buffer.rewards[i][0] + 0.99*target_critic.forward(torch.Tensor(buffer.next_states[i]), torch.Tensor(a))
-                    _a = buffer.actions[i]
-                    action = [0,0,0,0,0,0] # should I just use a from above?
-                    action[control[0].index(_a[0])] = 1
-                    action[3 + control[1].index(_a[1])] = 1
-                    L += (y_i - critic.forward(torch.Tensor(buffer.states[i]), torch.Tensor(action)))**2
-                L /= len(idxs)
-                # update critic
-                critic.backprop(L)
-                # update actor using sample policy gradient
-                L = 0
-                for i in idxs:
-                    a = actor.forward(torch.Tensor(buffer.states[i]))
-                    L -= critic.forward(torch.Tensor(buffer.states[i]), a)
-                L/=len(idxs)
-                actor.backprop(L)
-                # update targets
-                target_critic.update(critic)
-                target_actor.update(actor)
-            # actually apply the action
-            r = real_env.step(u, gui=False)
-            rw+=r
-            prev_traj = traj
-        else:
-            # should I propagate forward again separately?
-            r = real_env.step(prev_traj[step%5][1], gui=False) # here you also see difference between X and X^
-            # if r<rw:
-            #     rw = r
-    print(rw)
-    rewards.append(rw/t)
+for epoch in range(2):
+    print("epoch = " + str(epoch))
+    for episode in range(100):
+        # Resets initial state
+        # real_env.reset(X=state, goal=goal, icepatch=icepatch, blowout=blowout)
+        real_env.reset()
+        control_env = Environment(gui=False)
+        prev_traj = None
+        rw = 0
+        print(episode)
+        prev_r = -1e9
+        for t in range(1000): # timesteps that the model will be actuated for
+            control_env.reset(noise=False, X=real_env.car.X, goal=real_env.goal) # places the car in the controller env
+            X = np.array(control_env.car.X) # state
+            X_hat = X.copy()
+            if prev_traj is not None:
+                X_hat = prev_traj[5][0]
+            else:
+                X_hat = X
+            traj = []
+            if t%5 == 0:
+                # only do this once every 5 steps
+                for step in range(6): # calculates X, u for the planned trajectory.
+                    act_opt.zero_grad()
+                    cri_opt.zero_grad()
+                    u = actor.forward(torch.Tensor(np.concatenate(((X_hat - X), (real_env.goal - X)), axis=0))) # fix the inputs here and further down
+                    u = [control[0][torch.argmax(u[:3])], control[1][torch.argmax(u[3:6])]]
+                    traj.append([X, u])
+                    # execute input, get reward
+                    r = control_env.step(u, gui=False)
+                    _X = np.array(control_env.car.X) # next state
+                    buffer.record([np.concatenate(((X_hat - X), (real_env.goal - X)), axis=0), u, r, np.concatenate(((X_hat - X), (real_env.goal - _X)), axis=0)])
+                    X = _X
+                    if buffer.counter<N:
+                        idxs = np.random.choice(buffer.counter, buffer.counter)
+                    else:
+                        idxs = np.random.choice(buffer.counter, N)
+                    # update critic by minimising L
+                    L = 0
+                    for i in idxs:
+                        a = target_actor.forward(torch.Tensor(buffer.next_states[i]))
+                        y_i = buffer.rewards[i][0] + 0.99*target_critic.forward(torch.Tensor(buffer.next_states[i]), torch.Tensor(a))
+                        _a = buffer.actions[i]
+                        action = [0,0,0,0,0,0] # should I just use a from above?
+                        action[control[0].index(_a[0])] = 1
+                        action[3 + control[1].index(_a[1])] = 1
+                        L += (y_i - critic.forward(torch.Tensor(buffer.states[i]), torch.Tensor(action)))**2
+                    L /= len(idxs)
+                    # update critic
+                    critic.backprop(L)
+                    # update actor using sample policy gradient
+                    L = 0
+                    for i in idxs:
+                        a = actor.forward(torch.Tensor(buffer.states[i]))
+                        L -= critic.forward(torch.Tensor(buffer.states[i]), a)
+                    L/=len(idxs)
+                    actor.backprop(L) # L
+                    # update targets
+                    target_critic.update(critic)
+                    target_actor.update(actor)
+                # actually apply the action
+                r = real_env.step(u, gui=False)
+                rw+=r
+                # print(u)
+                print(r)
+                if r > -1000 or prev_r > r:
+                    break
+                prev_traj = traj
+                prev_r = r
+            else:
+                # should I propagate forward again separately?
+                r = real_env.step(prev_traj[step%5][1], gui=False) # here you also see difference between X and X^
+                # if r<rw:
+                #     rw = r
+        rewards.append(rw/t)
 torch.save(target_actor.state_dict(), "actor.pt")
 torch.save(target_critic.state_dict(), "critic.pt")
 # plt.plot(np.array(rewards))

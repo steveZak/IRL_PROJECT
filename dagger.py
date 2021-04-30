@@ -53,21 +53,6 @@ class Buffer:
         self.next_states[idx] = observation[3]
         self.counter +=1
 
-# combines expert and actor actions (include tau weight later?)
-def getCombinedAction(u_exp_idx, u_act): # gather class probabilities, instead of actor inputs
-    u_exp = np.array([0,0,0,0,0,0,0,0,0,0])
-    u_exp[int(u_exp_idx[0])] = 1
-    u_exp[int(u_exp_idx[1])] = 1 # 5+? (for now doesn't matter, since turning is kinda garbage)
-    # u_act = np.array([0,0,0,0,0,0,0,0,0,0])
-    # u_act[control[0].index(u_act_idx[0])] = 1
-    # u_act[5+control[1].index(u_act_idx[1])] = 1
-    gas = u_exp[0:5] + u_act[0:5]/sum(u_act[0:5])
-    steer = u_exp[5:10] + u_act[5:10]/sum(u_act[5:10])
-    u_comb = np.array([0,0,0,0,0,0,0,0,0,0])
-    u_comb[np.argmax(gas)] = 1
-    u_comb[5+np.argmax(steer)] = 1
-    return u_comb
-
 real_env = Environment()
 # control = [[-5.0, -2.5, 0, 2.5, 5.0], [-np.pi/3, -np.pi/6, 0, np.pi/6, np.pi/3]]
 control = [[-5.0, 0, 5.0], [-np.pi/3, 0, np.pi/3]]
@@ -81,7 +66,7 @@ act_opt = torch.optim.Adam(actor.parameters())
 
 # demonstration part (no adaptation, since there is no control network at this stage and all info is known)
 data = []
-num_demonstrations = 10
+num_demonstrations = 20
 for ep in range(num_demonstrations):
     config_g, config_x, config_icepatch, config_blowout = real_env.reset() # noise=False
     # getting expert trajectory
@@ -108,7 +93,22 @@ for ep in range(num_demonstrations):
         u = [gas_sig, steer_sig]
         r = real_env.step(u)
         _X = np.array(real_env.car.X)
+        if max(gas) == 0.5:
+            gas = [0, 1, 0]
+        else:
+            _gas = [0, 0, 0]
+            idx = np.argmax(gas)
+            _gas[idx] = 1
+            gas = _gas
+        if max(steering) == 0.5:
+            steering = [0, 1, 0]
+        else:
+            _steering = [0, 0, 0]
+            idx = np.argmax(steering)
+            _steering[idx] = 1
+            steering = _steering
         gas.extend(steering)
+        print(gas)
         buffer.record([np.concatenate(((X - X), (real_env.goal - X)), axis=0), gas, r, np.concatenate(((_X - _X), (real_env.goal - _X)), axis=0)])
         # buffer.record([, u, r, _X]) # rewards kinda irrelevant here, including bc why not
         traj_len += 1
@@ -124,7 +124,7 @@ pygame.quit()
 loss = torch.nn.BCEWithLogitsLoss()
 # loss = torch.nn.MultiLabelSoftMarginLoss()
 # loss = torch.nn.CrossEntropyLoss()
-for epoch in range(10):
+for epoch in range(15):
     l=0
     ctr=0
     for i in range(num_demonstrations):
@@ -276,40 +276,42 @@ for epoch in range(10):
     print(l/ctr)
 
 
-control_env = Environment(gui=False)
-for ep in range(10):
-    real_env = Environment()
-    goal, state, icepatch, blowout = real_env.reset()
-    control_env.reset(noise=False, X=real_env.car.X, goal=goal, icepatch=None, blowout=None)
-    prev_traj = None
-    X = np.array(real_env.car.X)
-    t=0
-    while True:
-        if prev_traj is None:
-            X_hat = np.array(real_env.car.X)
-        else:
-            X_hat = prev_traj[5][0] # keep the 5 step ahead projection for a more adequate comparison to ddpg
-        if t%5==0:
-            # predict X_hat trajectory with the actor on the control environment
-            traj = []
-            control_env.reset(noise=False, X=real_env.car.X, goal=real_env.goal, icepatch=None, blowout=None)
-            _X = np.array(real_env.car.X)
-            # how is the next state below useful?
-            for step in range(6):
-                # generate the expert input
-                u_act = actor.forward(torch.Tensor(np.concatenate(((X_hat - X), (real_env.goal - X)), axis=0))) # fix the inputs here and further down
-                r = control_env.step(u_act, gui=False)
-                # apply to the control env
-                traj.append([X, u])
-                X = control_env.car.X
-            u = actor.forward(torch.Tensor(np.concatenate(((X - X), (real_env.goal - X)), axis=0))) # fix the inputs here and further down
-            # apply to the control env
-            traj.append([X, u])
-            loss = control_env.step(u, gui=False)
-            X = control_env.car.X
-            prev_traj = traj
-        u_act = actor.forward(torch.Tensor(np.concatenate(((X_hat - X), (real_env.goal - X)), axis=0)))
-        # u_act = actor.forward(torch.Tensor(np.concatenate(((X - X), (real_env.goal - X)), axis=0)))
-        # apply to the real env
-        loss = real_env.step(u_act)
-        t+=1
+torch.save(actor.state_dict(), "actor_dagger.pt")
+
+# control_env = Environment(gui=False)
+# for ep in range(10):
+#     real_env = Environment()
+#     goal, state, icepatch, blowout = real_env.reset()
+#     control_env.reset(noise=False, X=real_env.car.X, goal=goal, icepatch=None, blowout=None)
+#     prev_traj = None
+#     X = np.array(real_env.car.X)
+#     t=0
+#     while True:
+#         if prev_traj is None:
+#             X_hat = np.array(real_env.car.X)
+#         else:
+#             X_hat = prev_traj[5][0] # keep the 5 step ahead projection for a more adequate comparison to ddpg
+#         if t%5==0:
+#             # predict X_hat trajectory with the actor on the control environment
+#             traj = []
+#             control_env.reset(noise=False, X=real_env.car.X, goal=real_env.goal, icepatch=None, blowout=None)
+#             _X = np.array(real_env.car.X)
+#             # how is the next state below useful?
+#             for step in range(6):
+#                 # generate the expert input
+#                 u_act = actor.forward(torch.Tensor(np.concatenate(((X_hat - X), (real_env.goal - X)), axis=0))) # fix the inputs here and further down
+#                 r = control_env.step(u_act, gui=False)
+#                 # apply to the control env
+#                 traj.append([X, u])
+#                 X = control_env.car.X
+#             u = actor.forward(torch.Tensor(np.concatenate(((X - X), (real_env.goal - X)), axis=0))) # fix the inputs here and further down
+#             # apply to the control env
+#             traj.append([X, u])
+#             loss = control_env.step(u, gui=False)
+#             X = control_env.car.X
+#             prev_traj = traj
+#         u_act = actor.forward(torch.Tensor(np.concatenate(((X_hat - X), (real_env.goal - X)), axis=0)))
+#         # u_act = actor.forward(torch.Tensor(np.concatenate(((X - X), (real_env.goal - X)), axis=0)))
+#         # apply to the real env
+#         loss = real_env.step(u_act)
+#         t+=1
