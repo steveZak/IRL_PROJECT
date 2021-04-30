@@ -98,7 +98,8 @@ class Environment:
             if blowout is None:
                 x = random.random()*900
                 y = random.random()*900
-                self.blowout = [[300+(random.random()*100), 500+random.random()*100], [300+(random.random()*100), 500+random.random()*100]]
+                self.blowout = [[x, y], [(random.random()*200), random.random()*200]]
+                # self.blowout = [[300+(random.random()*100), 500+random.random()*100], [300+(random.random()*100), 500+random.random()*100]]
             else:
                 self.blowout = blowout
         else:

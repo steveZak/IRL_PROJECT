@@ -108,6 +108,9 @@ cri_opt = torch.optim.Adam(critic.parameters())
 N = 50
 rewards = list()
 goal, state, icepatch, blowout = real_env.reset()
+loss_env = Environment(gui=False)
+goal_loss, state_loss, icepatch_loss, blowout_loss = loss_env.reset()
+rwds = []
 for epoch in range(2):
     print("epoch = " + str(epoch))
     for episode in range(100):
@@ -119,6 +122,7 @@ for epoch in range(2):
         rw = 0
         print(episode)
         prev_r = -1e9
+        orig_rew = None
         for t in range(1000): # timesteps that the model will be actuated for
             control_env.reset(noise=False, X=real_env.car.X, goal=real_env.goal) # places the car in the controller env
             X = np.array(control_env.car.X) # state
@@ -134,7 +138,9 @@ for epoch in range(2):
                     act_opt.zero_grad()
                     cri_opt.zero_grad()
                     u = actor.forward(torch.Tensor(np.concatenate(((X_hat - X), (real_env.goal - X)), axis=0))) # fix the inputs here and further down
-                    u = [control[0][torch.argmax(u[:3])], control[1][torch.argmax(u[3:6])]]
+                    # u = [control[0][torch.argmax(u[:3])], control[1][torch.argmax(u[3:6])]]
+                    u = [np.random.choice(control[0], p=u[:3].detach().numpy()), np.random.choice(control[1], p=u[3:].detach().numpy())]
+                    # print(u)
                     traj.append([X, u])
                     # execute input, get reward
                     r = control_env.step(u, gui=False)
@@ -172,9 +178,13 @@ for epoch in range(2):
                 r = real_env.step(u, gui=False)
                 rw+=r
                 # print(u)
-                print(r)
-                if r > -1000 or prev_r > r:
+                # print(r)
+                if orig_rew is None:
+                    orig_rew = r
+                if r > -1000 or prev_r>r:
                     break
+                # if r < orig_rew-5000:
+                #     break
                 prev_traj = traj
                 prev_r = r
             else:
@@ -183,7 +193,16 @@ for epoch in range(2):
                 # if r<rw:
                 #     rw = r
         rewards.append(rw/t)
-torch.save(target_actor.state_dict(), "actor.pt")
-torch.save(target_critic.state_dict(), "critic.pt")
-# plt.plot(np.array(rewards))
-# complete DAgger
+        loss_env.reset(X=state_loss, goal=goal_loss, icepatch=icepatch_loss, blowout=blowout_loss)
+        rwd = 0
+        for lidx in range(1000):
+            u = actor.forward(torch.Tensor(np.concatenate(((X_hat - X), (real_env.goal - X)), axis=0))) # fix the inputs here and further down
+            u = [np.random.choice(control[0], p=u[:3].detach().numpy()), np.random.choice(control[1], p=u[3:].detach().numpy())]
+            rwd += loss_env.step(u, gui=False)
+        rwds.append(rwd/1000)
+torch.save(target_actor.state_dict(), "actor_ac.pt")
+torch.save(target_critic.state_dict(), "critic_ac.pt")
+plt.plot(np.array(rwds), 'r-')
+plt.ylabel("Reward")
+plt.xlabel("Episode")
+plt.show()

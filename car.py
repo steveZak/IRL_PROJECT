@@ -100,7 +100,7 @@ class Car:
                 u[0] = 1.5*u[0]/abs(u[0]) # skidding caps acceleration at 1.5
         if blowout:
             if u[0] != 0:
-                if u[0]>0:# blowout causes deceleration
+                if u[0] > 0:# blowout causes deceleration
                     u[0] = u[0]-2
                 else:
                     u[0] = u[0]+2
